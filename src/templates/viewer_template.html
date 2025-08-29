@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Side-by-Side Diff Viewer</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8e8f0;
+            color: #2d1b2e;
+            line-height: 1.4;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #921992ee, #54afb3);
+            padding: 8px 15px;
+            border-bottom: 2px solid #7b508b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 50px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            color: #ffffff;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 15px;
+            font-size: 11px;
+        }
+        
+        .stat {
+            padding: 3px 6px;
+            background: #FFEB3B;
+            border-radius: 3px;
+            color: #000000;
+            border: 1px solid rgba(255,255,255,0.3);
+            font-size: 15px;
+        }
+        
+        .stat.success { background: rgba(114, 255, 119, 0.521); }
+        .stat.failed { background: rgba(255, 81, 69, 0.473); }
+        
+        .main-container {
+            display: flex;
+            height: calc(100vh - 50px);
+            position: relative;
+        }
+        
+        .sidebar {
+            width: 280px;
+            background: linear-gradient(180deg, #e8d5e0, #f0e1ec);
+            border-right: 2px solid #c287a3;
+            overflow-y: auto;
+            flex-shrink: 0;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.1);
+        }
+        
+        .folder-group {
+            border-bottom: 1px solid #d199b8;
+        }
+        
+        .folder-header {
+            padding: 8px 12px;
+            background: linear-gradient(135deg, #941294ee, #54afb3);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            border-left: 3px solid transparent;
+            font-size: 13px;
+            color: #ffffff;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        
+        .folder-header:hover {
+            background: linear-gradient(135deg, #a6518a, #b85c8f);
+        }
+        
+        .folder-header.has-high {
+            border-left-color: #c0392b;
+        }
+        
+        .folder-header.has-medium {
+            border-left-color: #e67e22;
+        }
+        
+        .folder-header.has-low {
+            border-left-color: #27ae60;
+        }
+        
+        .folder-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+        
+        .folder-content.active {
+            max-height: 500px;
+        }
+        
+        .file-item {
+            padding: 6px 12px 6px 24px;
+            cursor: pointer;
+            border-bottom: 1px solid #e4c7d6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-display: swap;
+            color: #000000;
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .file-item:hover {
+            background: rgba(198, 135, 163, 0.2);
+        }
+        
+        .file-item.active {
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            border-left: 3px solid #c0392b;
+            color: #ffffff;
+        }
+        
+        .file-item.resolved {
+            opacity: 0.6;
+        }
+        
+        /* Flag color coding for file items */
+        .file-item.flag-high {
+            border-left: 3px solid #c0392b;
+            background: #E91E63;
+            color: #ffffff;
+        }
+        
+        .file-item.flag-medium {
+            border-left: 3px solid #e67e22;
+            background: #FF9800;
+            color: #ffffff;
+        }
+        
+        .file-item.flag-low {
+            border-left: 3px solid #27ae60;
+            background: #4caf50;
+            color: #ffffff;
+        }
+        
+        .file-status {
+            font-size: 9px;
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-weight: bold;
+        }
+        
+        .status-success { background: #27ae60; color: #ffffff; }
+        .status-failed { background: #c0392b; color: #ffffff; }
+        .status-diff { background: #e67e22; color: #ffffff; }
+        .status-identical { background: #3498db; color: #ffffff; }
+        
+        .diff-viewer {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            background: #faf5f8;
+        }
+        
+        .diff-header {
+            padding: 8px 15px;
+            background: linear-gradient(135deg, #d199b8, #e4c7d6);
+            border-bottom: 2px solid #c287a3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 45px;
+            flex-shrink: 0;
+            color: #4a2c3a;
+            font-weight: 600;
+        }
+        
+        .diff-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .flag-select, .comment-input {
+            padding: 3px 6px;
+            background: rgba(255,255,255,0.9);
+            border: 1px solid #c287a3;
+            color: #4a2c3a;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        
+        .comment-input {
+            width: 150px;
+        }
+        
+        .btn {
+            padding: 4px 8px;
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 600;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        
+        .btn:hover {
+            background: linear-gradient(135deg, #6d2d47, #8e4162);
+        }
+        
+        .btn.resolved {
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+        }
+        
+        .diff-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #8e4162;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            background: #faf5f8;
+        }
+        
+        .spinner {
+            border: 3px solid #e4c7d6;
+            border-top: 3px solid #8e4162;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .diff-side {
+            flex: 1;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #ffffff;
+            border: 1px solid #e4c7d6;
+        }
+        
+        .diff-side h3 {
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            padding: 6px 10px;
+            margin: 0;
+            font-size: 12px;
+            color: #ffffff;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        
+        .diff-gutter {
+            width: 2px;
+            background: linear-gradient(180deg, #c287a3, #d199b8);
+            flex-shrink: 0;
+        }
+        
+        .line {
+            padding: 0 10px;
+            white-space: pre;
+            min-height: 18px;
+            position: relative;
+            color: #2d1b2e;
+            display: block; /* Ensure proper block display */
+            margin: 0; /* Remove any margin */
+        }
+        
+        .line.highlight {
+            background: rgba(230, 126, 34, 0.2);
+            border-left: 3px solid #e67e22;
+        }
+        
+        .line.highlight.resolved {
+            background: rgba(39, 174, 96, 0.15) !important;
+            border-left: 3px solid #27ae60 !important;
+            box-shadow: inset 0 0 0 1px rgba(40, 167, 69, 0.3);
+        }
+        
+        .line-number {
+            display: inline-block;
+            width: 40px;
+            color: #8e4162;
+            font-size: 10px;
+            text-align: right;
+            margin-right: 10px;
+            user-select: none;
+            vertical-align: top; /* Align properly */
+        }
+        
+        .arrow {
+            transition: transform 0.2s;
+            display: inline-block;
+            font-size: 10px;
+        }
+        
+        .folder-header:not(.active) .arrow {
+            transform: rotate(-90deg);
+        }
+        
+        .differences-panel {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 300px;
+            height: 100%;
+            background: linear-gradient(180deg, #f0e1ec, #f8e8f0);
+            border-left: 2px solid #c287a3;
+            overflow-y: auto;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 20;
+            box-shadow: -2px 0 4px rgba(0,0,0,0.1);
+        }
+        
+        .differences-panel.active {
+            transform: translateX(0);
+        }
+        
+        .differences-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            border-bottom: 2px solid #c287a3;
+            font-weight: bold;
+            font-size: 12px;
+            color: #ffffff;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        
+        .close-panel-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            border-radius: 3px;
+        }
+        
+        .close-panel-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .diff-item {
+            padding: 8px;
+            border-bottom: 1px solid #e4c7d6;
+            font-size: 11px;
+            color: #4a2c3a;
+        }
+        
+        .diff-item.resolved {
+            opacity: 0.5;
+            text-decoration: line-through;
+        }
+        
+        .diff-path {
+            font-weight: bold;
+            color: #8e4162;
+            margin-bottom: 4px;
+        }
+        
+        .diff-values {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4px;
+            margin-bottom: 4px;
+        }
+        
+        .diff-value {
+            padding: 2px 4px;
+            border-radius: 2px;
+            font-family: monospace;
+            color: #2d1b2e;
+        }
+        
+        .diff-left { background: rgba(192, 57, 43, 0.2); }
+        .diff-right { background: rgba(39, 174, 96, 0.2); }
+        
+        .diff-controls-mini {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .btn-mini {
+            padding: 2px 4px;
+            font-size: 9px;
+            border-radius: 2px;
+            background: linear-gradient(135deg, #c287a3, #d199b8);
+            color: #ffffff;
+        }
+        
+        .toggle-differences {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            border: none;
+            color: white;
+            padding: 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            z-index: 15;
+            font-weight: 600;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        
+        .save-indicator {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #27ae60, #2ecc71);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 3px;
+            display: none;
+            z-index: 1000;
+            font-size: 12px;
+            font-weight: 600;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+        .line.temp-highlight {
+            background: rgba(255, 255, 0, 0.5) !important;
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { background: rgba(255, 255, 0, 0.8); }
+            100% { background: rgba(255, 255, 0, 0.3); }
+        }
+
+        .line {
+            padding: 0 10px;
+            white-space: pre;
+            min-height: 18px;
+            position: relative;
+            color: #2d1b2e;
+            display: block; /* Ensure proper block display */
+            margin: 0; /* Remove any margin */
+        }
+
+        .line-number {
+            display: inline-block;
+            width: 40px;
+            color: #8e4162;
+            font-size: 10px;
+            text-align: right;
+            margin-right: 10px;
+            user-select: none;
+            vertical-align: top; /* Align properly */
+        }
+
+        .line.highlight {
+            background: rgba(230, 126, 34, 0.2);
+            border-left: 3px solid #e67e22;
+        }
+
+        .line.temp-highlight {
+            background: rgba(255, 255, 0, 0.5) !important;
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { background: rgba(255, 255, 0, 0.8); }
+            100% { background: rgba(255, 255, 0, 0.3); }
+        }
+
+        /* Fix the diff content area */
+        .diff-side {
+            flex: 1;
+            overflow: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            background: #ffffff;
+            border: 1px solid #e4c7d6;
+        }
+
+        .diff-side h3 {
+            background: linear-gradient(135deg, #8e4162, #a6518a);
+            padding: 6px 10px;
+            margin: 0;
+            font-size: 12px;
+            color: #ffffff;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.2);
+        }
+
+        .diff-item.resolved {
+            background-color: rgba(40, 167, 69, 0.15);
+            border-left: 3px solid #28a745;
+            box-shadow: inset 0 0 0 1px rgba(40, 167, 69, 0.2);
+        }
+
+        .diff-item.resolved .diff-path {
+            color: #1e7e34;
+            text-decoration: line-through;
+            font-weight: 600;
+        }
+
+        .diff-item.resolved .btn-mini {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            font-weight: 600;
+        }
+
+        .diff-item.resolved .btn {
+            background-color: #28a745;
+            color: white;
+        }
+
+        /* Resolved lines in the diff view */
+        .line.highlight.resolved {
+            background: rgba(40, 167, 69, 0.2) !important;
+            border-left: 3px solid #28a745 !important;
+        }
+
+        .line.highlight.resolved::before {
+            content: "✓ ";
+            color: #28a745;
+            font-weight: bold;
+            margin-right: 5px;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.1);
+        }
+        .diff-item.resolved .btn-mini:hover {
+            background: linear-gradient(135deg, #1e7e34, #17a2b8);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>API Side-by-Side Diff Viewer</h1>
+        <div class="stats-bar">
+            <div class="stat">Total: {{ stats.total_docs }}</div>
+            <div class="stat success">Success: {{ stats.success_count }} ({{ stats.success_rate }}%)</div>
+            <div class="stat failed">Failed: {{ stats.failed_count }}</div>
+            <button class="btn" id="saveReportBtn">Save</button>
+        </div>
+    </div>
+    
+    <div class="save-indicator" id="saveIndicator">Saved!</div>
+    
+    <div class="main-container">
+        <div class="sidebar">
+            {% for main_folder, items in folder_groups.items() %}
+            <div class="folder-group">
+                <div class="folder-header active" onclick="toggleFolder('{{ main_folder }}')" id="folder-{{ main_folder }}">
+                    <span>
+                        <span class="arrow">▼</span>
+                        {{ main_folder }} ({{ items|length }})
+                    </span>
+                </div>
+                <div class="folder-content active" id="content-{{ main_folder }}">
+                    {% for item in items %}
+                    <div class="file-item" 
+                         onclick="loadDifferences('{{ item.folder_name }}', '{{ item.sub_filename }}')"
+                         id="file-{{ item.folder_name.replace(' ', '_').replace('/', '_') }}"
+                         data-folder="{{ item.folder_name }}" data-filename="{{ item.sub_filename }}">
+                        <div>{{ item.sub_filename }}</div>
+                        <span class="file-status {{ item.status_class }}">{{ item.status_text }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="diff-viewer">
+            <div class="diff-header">
+                <div>Select a file to view comparison</div>
+                <div class="diff-controls" id="diffControls" style="display: none;">
+                    <select class="flag-select" id="flagSelect">
+                        <option value="">No Flag</option>
+                        <option value="high">High Priority</option>
+                        <option value="medium">Medium Priority</option>
+                        <option value="low">Low Priority</option>
+                    </select>
+                    <input type="text" class="comment-input" id="commentInput" placeholder="Comment...">
+                    <button class="btn" id="resolveBtn">Resolve All</button>
+                    <button class="btn" id="showDiffsBtn">Show Diffs</button>
+                </div>
+            </div>
+            <div class="diff-content" id="diffContent">
+                <div class="loading">
+                    <h3>Select a file to view side-by-side comparison</h3>
+                    <p>Differences will be loaded on-demand for better performance</p>
+                </div>
+            </div>
+            <button class="toggle-differences" id="toggleDiffsBtn" style="display: none;">Diffs</button>
+        </div>
+    </div>
+    
+    <div class="differences-panel" id="differencesPanel">
+        <div class="differences-panel-header">
+            <span>Differences</span>
+            <button class="close-panel-btn" id="closePanelBtn" title="Close Panel">×</button>
+        </div>
+        <div id="differencesList"></div>
+    </div>
+    
+    <script>
+let currentFile = null;
+let savedData = {};  // Will be loaded via AJAX
+let currentDifferences = [];
+
+// Load initial progress via AJAX instead of inline JSON
+async function loadInitialProgress() {
+    try {
+        console.log('Loading initial progress via AJAX...');
+        const response = await fetch('/api/progress/all');
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+        const result = await response.json();
+        console.log('Full API response:', result);
+
+        if (result.success) {
+            savedData = result.data;
+            console.log('Initial progress loaded:', Object.keys(savedData).length, 'files');
+            console.log('Sample data:', Object.keys(savedData).slice(0, 3).map(key => ({
+                key: key,
+                data: savedData[key]
+            })));
+            applyInitialProgress();
+        } else {
+            console.error('Failed to load initial progress:', result.error);
+        }
+    } catch (error) {
+        console.error('Error loading initial progress:', error);
+    }
+}
+
+console.log('Initial progress loaded:', Object.keys(savedData).length, 'files');
+
+let appliedCount = 0;
+// Add this function to apply visual states on page load
+function applyInitialProgress() {
+    console.log('Applying initial progress to UI...');
+    for (const [filePath, progress] of Object.entries(savedData)) {
+        updateFileVisualState(filePath);
+        appliedCount++;
+    }
+
+    console.log(`Applied progress to ${appliedCount} files`);
+
+    updateFolderColors();
+}
+
+function toggleFolder(folderId) {
+    const content = document.getElementById(`content-${folderId}`);
+    const header = document.getElementById(`folder-${folderId}`);
+    
+    if (content && header) {
+        content.classList.toggle('active');
+        header.classList.toggle('active');
+    }
+}
+
+function loadDifferences(folder, filename) {
+    console.log('Loading differences for folder:', folder, 'filename:', filename);
+    
+    // Clear previous selection
+    document.querySelectorAll('.file-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    // Mark current selection
+    const fileElement = document.getElementById('file-' + folder.replace(/ /g, '_').replace(/\//g, '_'));
+    if (fileElement) {
+        fileElement.classList.add('active');
+    }
+    
+    // The folder IS the complete file path
+    currentFile = folder;
+    console.log('Set currentFile to:', currentFile);
+    
+    // Show loading
+    document.getElementById('diffContent').innerHTML = `
+        <div class="loading">
+            <div class="spinner"></div>
+            <h3>Loading differences...</h3>
+            <p>Processing ${filename || folder}</p>
+        </div>
+    `;
+    
+    // Show controls
+    document.getElementById('diffControls').style.display = 'flex';
+    
+    // Load saved data for this file (including resolved diffs)
+    const savedFileData = savedData[currentFile] || {};
+    document.getElementById('flagSelect').value = savedFileData.flag || '';
+    document.getElementById('commentInput').value = savedFileData.comment || '';
+    document.getElementById('resolveBtn').textContent = savedFileData.resolved ? 'Unresolve All' : 'Resolve All';
+    document.getElementById('resolveBtn').className = savedFileData.resolved ? 'btn resolved' : 'btn';
+    
+    console.log('Loaded saved data for current file:', savedFileData);
+    
+    // Use just the folder name as the file path
+    const filePath = folder;
+    
+    // Load differences via AJAX
+    fetch(`/api/file/${encodeURIComponent(filePath)}`, {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(result => {
+        console.log('API Response:', result);
+        if (result.success) {
+            displayDifferences(result.data);
+        } else {
+            showError(result.error || 'Unknown error occurred');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('Failed to load differences: ' + error.message);
+    });
+}
+
+function displayDifferences(data) {
+    console.log('Displaying differences:', data);
+    
+    if (!data.success) {
+        showErrorInfo(data);
+        return;
+    }
+    
+    if (!data.has_differences) {
+        document.getElementById('diffContent').innerHTML = `
+            <div class="loading">
+                <h3>Files are Identical</h3>
+                <p>Both API responses returned the same result</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Store current differences
+    currentDifferences = data.differences || [];
+    
+    // Merge saved progress from the API response
+    if (data.progress) {
+        console.log('Merging progress from API response:', data.progress);
+        if (!savedData[currentFile]) savedData[currentFile] = {};
+        
+        // Update with any data from the database
+        if (data.progress.flag) savedData[currentFile].flag = data.progress.flag;
+        if (data.progress.comment) savedData[currentFile].comment = data.progress.comment;
+        if (data.progress.resolved !== undefined) savedData[currentFile].resolved = data.progress.resolved;
+        if (data.progress.resolved_diffs) savedData[currentFile].resolvedDiffs = data.progress.resolved_diffs;
+        
+        console.log('Updated savedData for current file:', savedData[currentFile]);
+        
+        // Update UI controls
+        document.getElementById('flagSelect').value = savedData[currentFile].flag || '';
+        document.getElementById('commentInput').value = savedData[currentFile].comment || '';
+        document.getElementById('resolveBtn').textContent = savedData[currentFile].resolved ? 'Unresolve All' : 'Resolve All';
+        document.getElementById('resolveBtn').className = savedData[currentFile].resolved ? 'btn resolved' : 'btn';
+    }
+    
+    // Show the full side-by-side diff
+    showSideBySideDiff(data);
+}
+
+function showSideBySideDiff(data) {
+    // Get the full file content lines (EXACTLY like your working code)
+    const lines1 = data.left_content || [];
+    const lines2 = data.right_content || [];
+    currentDifferences = data.differences || [];
+    
+    // Find line differences (structural differences)
+    const lineDifferences = currentDifferences.filter(d => d.type === 'line_change');
+    
+    const maxLines = Math.max(lines1.length, lines2.length);
+    
+    let leftContent = `<h3>${data.left_api || 'API 1'}</h3>`;
+    let rightContent = `<h3>${data.right_api || 'API 2'}</h3>`;
+    
+    // Build the complete file content with highlights (EXACTLY like your working code)
+    for (let i = 0; i < maxLines; i++) {
+        const line1 = lines1[i] || '';
+        const line2 = lines2[i] || '';
+        
+        const hasDiff = lineDifferences.some(d => d.line_left === i || d.line_right === i);
+        const diffClass = hasDiff ? 'highlight' : '';
+        
+        // Use proper line formatting (no extra divs, proper line-number span)
+        leftContent += `<div class="line ${diffClass}" data-line="${i}" data-side="left"><span class="line-number">${i + 1}</span>${escapeHtml(line1)}</div>`;
+        rightContent += `<div class="line ${diffClass}" data-line="${i}" data-side="right"><span class="line-number">${i + 1}</span>${escapeHtml(line2)}</div>`;
+    }
+    
+    // Create the side-by-side layout (EXACTLY like your working code)
+    const diffHtml = `
+        <div class="diff-side" id="leftDiffSide">${leftContent}</div>
+        <div class="diff-gutter"></div>
+        <div class="diff-side" id="rightDiffSide">${rightContent}</div>
+    `;
+    
+    document.getElementById('diffContent').innerHTML = diffHtml;
+    document.getElementById('toggleDiffsBtn').style.display = 'block';
+    
+    // Synchronize scrolling between the two sides
+    synchronizeScroll();
+    
+    // Update differences list
+    updateDifferencesList();
+    
+    // IMPORTANT: Apply resolved highlights after the DOM is updated
+    setTimeout(() => {
+        updateHighlights();
+    }, 50);
+}
+
+function synchronizeScroll() {
+    const leftSide = document.getElementById('leftDiffSide');
+    const rightSide = document.getElementById('rightDiffSide');
+    
+    if (!leftSide || !rightSide) return;
+    
+    let isScrolling = false;
+    
+    leftSide.addEventListener('scroll', function() {
+        if (!isScrolling) {
+            isScrolling = true;
+            rightSide.scrollTop = leftSide.scrollTop;
+            setTimeout(() => isScrolling = false, 10);
+        }
+    });
+    
+    rightSide.addEventListener('scroll', function() {
+        if (!isScrolling) {
+            isScrolling = true;
+            leftSide.scrollTop = rightSide.scrollTop;
+            setTimeout(() => isScrolling = false, 10);
+        }
+    });
+}
+
+// Update the updateDifferencesList function to show resolved states correctly
+function updateDifferencesList() {
+    const list = document.getElementById('differencesList');
+    const savedFileData = savedData[currentFile] || {};
+    
+    console.log('Updating differences list with saved data:', savedFileData);
+    
+    let html = '';
+    currentDifferences.forEach((diff, index) => {
+        const resolved = savedFileData.resolvedDiffs && savedFileData.resolvedDiffs[index];
+        const resolvedClass = resolved ? 'resolved' : '';
+        
+        console.log(`Difference ${index}: resolved = ${resolved}`);
+        
+        html += `
+            <div class="diff-item ${resolvedClass}" data-index="${index}">
+                <div class="diff-path">${diff.path}</div>
+                <div class="diff-values">
+                    <div class="diff-value diff-left">${escapeHtml(diff.left)}</div>
+                    <div class="diff-value diff-right">${escapeHtml(diff.right)}</div>
+                </div>
+                <div class="diff-controls-mini">
+                    <button class="btn btn-mini" onclick="resolveDifference(${index})">
+                        ${resolved ? 'Unresolve' : 'Resolve'}
+                    </button>
+                    <button class="btn btn-mini" onclick="highlightDifference(${index})">Show</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    list.innerHTML = html;
+}
+
+function toggleDifferences() {
+    const panel = document.getElementById('differencesPanel');
+    panel.classList.toggle('active');
+}
+
+function closeDifferences() {
+    const panel = document.getElementById('differencesPanel');
+    panel.classList.remove('active');
+}
+
+function resolveDifference(index) {
+    if (!currentFile) {
+        console.error('No currentFile set for resolving difference!');
+        return;
+    }
+    
+    console.log(`Resolving difference ${index} for file: ${currentFile}`);
+    
+    // Update local data
+    if (!savedData[currentFile]) savedData[currentFile] = {};
+    if (!savedData[currentFile].resolvedDiffs) savedData[currentFile].resolvedDiffs = {};
+    
+    // Toggle the resolved state
+    const wasResolved = savedData[currentFile].resolvedDiffs[index] || false;
+    savedData[currentFile].resolvedDiffs[index] = !wasResolved;
+    
+    console.log(`Difference ${index} resolved state: ${!wasResolved}`);
+    
+    // Save to database via API
+    fetch('/api/progress/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            file_key: currentFile,
+            resolved_diffs: savedData[currentFile].resolvedDiffs
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        console.log('Save resolved diffs response:', result);
+        if (result.success) {
+            // Update UI
+            updateDifferencesList();
+            updateHighlights();
+            showSaveIndicator(`Difference ${!wasResolved ? 'resolved' : 'unresolved'}`);
+        } else {
+            console.error('Failed to save resolved diffs:', result.error);
+            // Revert local change if save failed
+            savedData[currentFile].resolvedDiffs[index] = wasResolved;
+        }
+    })
+    .catch(error => {
+        console.error('Error saving resolved diffs:', error);
+        // Revert local change if save failed
+        savedData[currentFile].resolvedDiffs[index] = wasResolved;
+        updateDifferencesList();
+        updateHighlights();
+    });
+}
+
+
+// Enhanced updateHighlights function with better logging:
+function updateHighlights() {
+    const savedFileData = savedData[currentFile] || {};
+    console.log('Updating highlights with resolved diffs:', savedFileData.resolvedDiffs);
+    
+    if (!savedFileData.resolvedDiffs) {
+        console.log('No resolved diffs to apply');
+        return;
+    }
+    
+    // Apply resolved state to lines in the diff view
+    document.querySelectorAll('.line.highlight').forEach(line => {
+        const lineIndex = parseInt(line.getAttribute('data-line'));
+        const diffIndex = currentDifferences.findIndex(d => d.line_left === lineIndex || d.line_right === lineIndex);
+        
+        if (diffIndex >= 0 && savedFileData.resolvedDiffs[diffIndex]) {
+            line.classList.add('resolved');
+            console.log(`Applied resolved class to line ${lineIndex} (diff ${diffIndex})`);
+        } else {
+            line.classList.remove('resolved');
+        }
+    });
+    
+    console.log(`Applied resolved highlights to ${Object.keys(savedFileData.resolvedDiffs).length} differences`);
+}
+
+function highlightDifference(index) {
+    const diff = currentDifferences[index];
+    const targetLine = diff.line_left !== null ? diff.line_left : diff.line_right;
+    
+    if (targetLine !== null && targetLine !== undefined) {
+        const leftElement = document.querySelector('#leftDiffSide [data-line="' + targetLine + '"]');
+        const rightElement = document.querySelector('#rightDiffSide [data-line="' + targetLine + '"]');
+        
+        if (leftElement || rightElement) {
+            const elementToScrollTo = leftElement || rightElement;
+            const leftSide = document.getElementById('leftDiffSide');
+            const rightSide = document.getElementById('rightDiffSide');
+            
+            if (leftSide && rightSide && elementToScrollTo) {
+                // Calculate proper scroll position
+                const offsetTop = elementToScrollTo.offsetTop - 100;
+                leftSide.scrollTop = offsetTop;
+                rightSide.scrollTop = offsetTop;
+                
+                // Add temporary highlight (like your working code)
+                if (leftElement) leftElement.classList.add('temp-highlight');
+                if (rightElement) rightElement.classList.add('temp-highlight');
+                
+                setTimeout(() => {
+                    if (leftElement) leftElement.classList.remove('temp-highlight');
+                    if (rightElement) rightElement.classList.remove('temp-highlight');
+                }, 2000);
+            }
+        }
+    }
+}
+
+function showError(message) {
+    document.getElementById('diffContent').innerHTML = `
+        <div class="loading">
+            <h3>Error</h3>
+            <p>${message}</p>
+            <button onclick="location.reload()" class="btn">Reload Page</button>
+        </div>
+    `;
+}
+
+function showErrorInfo(data) {
+    let errorHtml = `
+        <div class="loading">
+            <h3>Processing Error</h3>
+            <p>There was an error processing this file.</p>
+    `;
+    
+    if (data.error) {
+        errorHtml += `<div class="error-details">
+            <h4>Error Details:</h4>
+            <pre>${escapeHtml(data.error)}</pre>
+        </div>`;
+    }
+    
+    if (data.file_count !== undefined) {
+        errorHtml += `<p>Response files found: ${data.file_count}</p>`;
+    }
+    
+    errorHtml += `</div>`;
+    
+    document.getElementById('diffContent').innerHTML = errorHtml;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML;
+}
+
+// Save functions
+function saveFlag() {
+    if (!currentFile) {
+        console.error('No currentFile set!');
+        return;
+    }
+    
+    const flag = document.getElementById('flagSelect').value;
+    console.log('Saving flag:', flag, 'for file:', currentFile);
+    
+    fetch('/api/progress/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            file_key: currentFile,  // This should be the full folder name
+            flag: flag || null
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        console.log('Save flag response:', result);
+        if (result.success) {
+            if (!savedData[currentFile]) savedData[currentFile] = {};
+            savedData[currentFile].flag = flag;
+            updateFileVisualState(currentFile);
+            showSaveIndicator('Flag saved');
+        } else {
+            console.error('Failed to save flag:', result.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving flag:', error);
+    });
+}
+
+function saveComment() {
+    if (!currentFile) return;
+    
+    const comment = document.getElementById('commentInput').value;
+    
+    fetch('/api/progress/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            file_key: currentFile,
+            comment: comment
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            if (!savedData[currentFile]) savedData[currentFile] = {};
+            savedData[currentFile].comment = comment;
+            showSaveIndicator('Comment saved');
+        } else {
+            console.error('Failed to save comment:', result.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving comment:', error);
+    });
+}
+
+function toggleResolved() {
+    if (!currentFile) return;
+    
+    const currentState = savedData[currentFile]?.resolved || false;
+    const newState = !currentState;
+    
+    fetch('/api/progress/save', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            file_key: currentFile,
+            resolved: newState
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            if (!savedData[currentFile]) savedData[currentFile] = {};
+            savedData[currentFile].resolved = newState;
+            
+            // Update button
+            const btn = document.getElementById('resolveBtn');
+            btn.textContent = newState ? 'Unresolve All' : 'Resolve All';
+            btn.className = newState ? 'btn resolved' : 'btn';
+            
+            updateFileVisualState(currentFile);
+            showSaveIndicator(newState ? 'Resolved' : 'Unresolved');
+        } else {
+            console.error('Failed to save resolved state:', result.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error saving resolved state:', error);
+    });
+}
+
+function updateFileVisualState(filePath) {
+    // Try different ID formats to find the element
+    const possibleIds = [
+        'file-' + filePath.replace(/ /g, '_').replace(/\//g, '_'),
+        'file-' + filePath.replace(/[^a-zA-Z0-9]/g, '_'),
+        'file-' + filePath
+    ];
+    
+    let fileElement = null;
+    for (const id of possibleIds) {
+        fileElement = document.getElementById(id);
+        if (fileElement) {
+            console.log(`Found file element with ID: ${id}`);
+            break;
+        }
+    }
+    
+    if (!fileElement) {
+        // Try finding by data attribute
+        fileElement = document.querySelector(`[data-file-path="${filePath}"]`);
+        if (fileElement) {
+            console.log(`Found file element by data-file-path: ${filePath}`);
+        }
+    }
+    
+    if (fileElement && savedData[filePath]) {
+        const data = savedData[filePath];
+        console.log(`Updating visual state for ${filePath}:`, data);
+        
+        // Remove existing flag classes
+        fileElement.classList.remove('flag-high', 'flag-medium', 'flag-low', 'resolved');
+        
+        // Add flag class
+        if (data.flag) {
+            fileElement.classList.add(`flag-${data.flag}`);
+            console.log(`Applied flag-${data.flag} to ${filePath}`);
+        }
+        
+        // Add resolved class
+        if (data.resolved) {
+            fileElement.classList.add('resolved');
+            console.log(`Applied resolved state to ${filePath}`);
+        }
+    } else {
+        console.warn(`Could not find file element for: ${filePath}`);
+        console.log('Available file elements:', Array.from(document.querySelectorAll('.file-item')).map(el => el.id || el.getAttribute('data-file-path')));
+    }
+}
+
+function showSaveIndicator(message) {
+    const indicator = document.getElementById('saveIndicator');
+    if (indicator) {
+        indicator.textContent = message;
+        indicator.style.display = 'block';
+        setTimeout(() => {
+            indicator.style.display = 'none';
+        }, 2000);
+    }
+}
+
+function saveToStorage() {
+    // This would be handled by the backend API calls
+    console.log('Data saved to backend');
+}
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, applying initial progress...');
+
+    // Wait a bit for the DOM to fully render, then load progress
+    setTimeout(() => {
+        loadInitialProgress();
+    }, 100);
+    
+    // Apply initial progress to UI
+    applyInitialProgress();
+    
+    // Flag select change
+    const flagSelect = document.getElementById('flagSelect');
+    if (flagSelect) {
+        flagSelect.addEventListener('change', saveFlag);
+    }
+    
+    // Comment input change (debounced)
+    const commentInput = document.getElementById('commentInput');
+    if (commentInput) {
+        let commentTimeout;
+        commentInput.addEventListener('input', () => {
+            clearTimeout(commentTimeout);
+            commentTimeout = setTimeout(saveComment, 1000);
+        });
+    }
+    
+    // Resolve button
+    const resolveBtn = document.getElementById('resolveBtn');
+    if (resolveBtn) {
+        resolveBtn.addEventListener('click', toggleResolved);
+    }
+    
+    // Show differences button
+    const showDiffsBtn = document.getElementById('showDiffsBtn');
+    if (showDiffsBtn) {
+        showDiffsBtn.addEventListener('click', toggleDifferences);
+    }
+    
+    // Toggle differences button
+    const toggleDiffsBtn = document.getElementById('toggleDiffsBtn');
+    if (toggleDiffsBtn) {
+        toggleDiffsBtn.addEventListener('click', toggleDifferences);
+    }
+    
+    // Close panel button
+    const closePanelBtn = document.getElementById('closePanelBtn');
+    if (closePanelBtn) {
+        closePanelBtn.addEventListener('click', closeDifferences);
+    }
+});
+
+// Add this function for folder colors
+function updateFolderColors() {
+    const folderFlags = {};
+    
+    // Collect flags for each folder
+    for (const [filePath, progress] of Object.entries(savedData)) {
+        if (progress.flag) {
+            const folder = filePath.split('_')[0]; // First part before underscore
+            if (!folderFlags[folder]) folderFlags[folder] = [];
+            folderFlags[folder].push(progress.flag);
+        }
+    }
+    
+    // Apply folder colors
+    document.querySelectorAll('.folder-header').forEach(header => {
+        const folder = header.getAttribute('data-folder') || header.id.replace('folder-', '');
+        header.classList.remove('has-high', 'has-medium', 'has-low');
+        
+        if (folderFlags[folder]) {
+            if (folderFlags[folder].includes('high')) {
+                header.classList.add('has-high');
+            } else if (folderFlags[folder].includes('medium')) {
+                header.classList.add('has-medium');
+            } else if (folderFlags[folder].includes('low')) {
+                header.classList.add('has-low');
+            }
+        }
+    });
+}
+    </script>
+</body>
+</html>

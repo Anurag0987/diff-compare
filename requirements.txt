@@ -1,0 +1,6 @@
+Flask
+requests
+jsonschema
+flask-cors
+cydifflib
+pandas
