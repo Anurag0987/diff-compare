@@ -295,7 +295,24 @@ class DiffViewer:
                     'success': False,
                     'error': str(e)
                 }), 500
-    
+        @self.app.route("/api/folder_comment/<folder>", methods=["GET"])
+        def get_folder_comment(folder):
+            try:
+                comment = self.storage_manager.get_folder_comment(folder)
+                return jsonify({"comment": comment})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+
+        @self.app.route("/api/folder_comment/<folder>", methods=["POST"])
+        def set_folder_comment(folder):
+            try:
+                data = request.json
+                comment = data.get("comment", "")
+                self.storage_manager.set_folder_comment(folder, comment)
+                return jsonify({"success": True})
+            except Exception as e:
+                return jsonify({"success": False, "error": str(e)}), 500
+
     def run(self, host='127.0.0.1', port=5000, debug=True):
         """Run the Flask application"""
         print(f"Starting API Diff Viewer...")

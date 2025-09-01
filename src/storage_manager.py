@@ -66,6 +66,12 @@ class StorageManager:
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
+
+                cursor.execute(
+                    "CREATE TABLE IF NOT EXISTS folder_comments ("
+                    "folder TEXT PRIMARY KEY, "
+                    "comment TEXT)"
+                )
                 
                 conn.commit()
                 print("Database initialized successfully")
@@ -536,3 +542,23 @@ class StorageManager:
             )
         
         return True
+    
+    def get_folder_comment(self, folder_name):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT comment FROM folder_comments WHERE folder=?",
+                (folder_name,)
+            )
+            row = cursor.fetchone()
+            return row[0] if row else ""
+
+    def set_folder_comment(self, folder_name, comment):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO folder_comments (folder, comment) VALUES (?, ?) "
+                "ON CONFLICT(folder) DO UPDATE SET comment=?",
+                (folder_name, comment, comment)
+            )
+            conn.commit()

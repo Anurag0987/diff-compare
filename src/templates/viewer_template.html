@@ -568,6 +568,40 @@
         .diff-item.resolved .btn-mini:hover {
             background: linear-gradient(135deg, #1e7e34, #17a2b8);
         }
+        .folder-header {
+            position: relative;
+        }
+        .folder-comment-box {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            min-width: 220px;
+            max-width: 350px;
+            min-height: 60px;
+            max-height: 200px;
+            background: #fff;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            z-index: 10;
+            padding: 8px;
+            resize: both;
+            overflow: auto;
+            transition: opacity 0.2s;
+        }
+        .folder-comment-text {
+            width: 100%;
+            min-height: 40px;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            background: transparent;
+            resize: none;
+        }
+        .folder-comment-status {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -587,11 +621,15 @@
         <div class="sidebar">
             {% for main_folder, items in folder_groups.items() %}
             <div class="folder-group">
-                <div class="folder-header active" onclick="toggleFolder('{{ main_folder }}')" id="folder-{{ main_folder }}">
+                <div class="folder-header active" onclick="toggleFolder('{{ main_folder }}')" id="folder-{{ main_folder }}" data-folder="{{ main_folder }}">
                     <span>
                         <span class="arrow">▼</span>
                         {{ main_folder }} ({{ items|length }})
                     </span>
+                    <div class="folder-comment-box" style="display:none;">
+                        <textarea class="folder-comment-text" placeholder="Comment for this group..."></textarea>
+                        <div class="folder-comment-status"></div>
+                    </div>
                 </div>
                 <div class="folder-content active" id="content-{{ main_folder }}">
                     {% for item in items %}
@@ -1333,6 +1371,38 @@ function updateFolderColors() {
         }
     });
 }
+
+document.querySelectorAll('.folder-header').forEach(header => {
+    const folder = header.getAttribute('data-folder');
+    const commentBox = header.querySelector('.folder-comment-box');
+    const textarea = commentBox.querySelector('.folder-comment-text');
+    const status = commentBox.querySelector('.folder-comment-status');
+    let saveTimeout;
+
+    header.addEventListener('mouseenter', () => {
+        commentBox.style.display = 'block';
+        fetch(`/api/folder_comment/${encodeURIComponent(folder)}`)
+            .then(res => res.json())
+            .then(data => { textarea.value = data.comment || ""; status.textContent = ""; });
+    });
+
+    header.addEventListener('mouseleave', () => {
+        commentBox.style.display = 'none';
+        status.textContent = "";
+    });
+
+    textarea.addEventListener('input', () => {
+        status.textContent = "Saving...";
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(() => {
+            fetch(`/api/folder_comment/${encodeURIComponent(folder)}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ comment: textarea.value })
+            }).then(() => { status.textContent = "Saved"; });
+        }, 600);
+    });
+});
     </script>
 </body>
 </html>
