@@ -68,11 +68,14 @@ class DiffViewer:
                 # IMPORTANT: Get all saved progress for initial loading
                 all_progress = self.storage_manager.get_all_progress()
                 print(f"Loading initial progress: {len(all_progress)} files with saved data")
+
+                average_times = self.file_processor.get_average_processing_times()
                 
                 return render_template('viewer_template.html', 
                                      folder_groups=folder_groups,
                                      stats=stats_formatted,
-                                     initial_progress=all_progress)  # Pass to template
+                                     initial_progress=all_progress,
+                                     average_times=average_times)  # Pass to template
                                      
             except Exception as e:
                 print(f"Error in index route: {e}")

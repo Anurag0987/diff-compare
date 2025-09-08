@@ -611,6 +611,8 @@
             <div class="stat">Total: {{ stats.total_docs }}</div>
             <div class="stat success">Success: {{ stats.success_count }} ({{ stats.success_rate }}%)</div>
             <div class="stat failed">Failed: {{ stats.failed_count }}</div>
+            <div class="stat">Avg Local: {{ average_times.avg_local if average_times.avg_local is not none else 'N/A' }}s</div>
+            <div class="stat">Avg Remote: {{ average_times.avg_remote if average_times.avg_remote is not none else 'N/A' }}s</div>
             <button class="btn" id="saveReportBtn">Save</button>
         </div>
     </div>
@@ -659,6 +661,10 @@
                     <input type="text" class="comment-input" id="commentInput" placeholder="Comment...">
                     <button class="btn" id="resolveBtn">Resolve All</button>
                     <button class="btn" id="showDiffsBtn">Show Diffs</button>
+                </div>
+                <div id="processing-times-panel" style="margin-left: 20px; font-size: 12px;">
+                    <div id="left-api-processing-time"></div>
+                    <div id="right-api-processing-time"></div>
                 </div>
             </div>
             <div class="diff-content" id="diffContent">
@@ -808,6 +814,9 @@ function loadDifferences(folder, filename) {
 
 function displayDifferences(data) {
     console.log('Displaying differences:', data);
+
+    // Update processing times panel
+    updateProcessingTimesPanel(data);
     
     if (!data.success) {
         showErrorInfo(data);
@@ -1370,6 +1379,17 @@ function updateFolderColors() {
             }
         }
     });
+}
+
+function updateProcessingTimesPanel(data) {
+    // data.processing_times is an object: { left_api: time, right_api: time }
+    const leftApi = data.left_api;
+    const rightApi = data.right_api;
+    const times = data.processing_times || {};
+    document.getElementById('left-api-processing-time').textContent =
+        leftApi ? `${leftApi} Processing Time: ${times[leftApi] !== undefined && times[leftApi] !== null ? times[leftApi] + 's' : 'N/A'}` : '';
+    document.getElementById('right-api-processing-time').textContent =
+        rightApi ? `${rightApi} Processing Time: ${times[rightApi] !== undefined && times[rightApi] !== null ? times[rightApi] + 's' : 'N/A'}` : '';
 }
 
 document.querySelectorAll('.folder-header').forEach(header => {

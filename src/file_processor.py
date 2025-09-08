@@ -8,11 +8,49 @@ from collections import defaultdict
 class FileProcessor:
     def __init__(self, results_dir):
         self.results_dir = results_dir
-        self.ignore_patterns = [
-            r'data\[\d+\]\.OCRData\[\d+\]\.location',
-            r'data\[\d+\]\.OCRData\[\d+\]\.confidence'
-        ]
+        # self.ignore_patterns = [
+        #     r'data\[\d+\]\.OCRData\[\d+\]\.location',
+        #     r'data\[\d+\]\.OCRData\[\d+\]\.confidence'
+        # ]
+        # self.ignore_patterns = [
+        #     r'\.location(\.|$|\[)',      # Any path ending with .location or .location[...]
+        #     r'\.confidence(\.|$|\[)',    # Any path ending with .confidence or .confidence[...]
+        #     r'Font Check',               # Any path containing Font Check
+        #     r'\.name(\.|$|\[)',          # Any path ending with .name or .name[...]
+        # ]
+        self.ignore_patterns = []
     
+    def get_average_processing_times(self):
+        """Calculate average processing times for local and remote APIs, ignoring pairs where either failed"""
+        local_times = []
+        remote_times = []
+        for folder_name in os.listdir(self.results_dir):
+            folder_path = os.path.join(self.results_dir, folder_name)
+            if not os.path.isdir(folder_path):
+                continue
+            # Find local and remote response files for this folder
+            response_files = [f for f in os.listdir(folder_path) if f.endswith('_response.json')]
+            local_file = next((f for f in response_files if 'local' in f), None)
+            remote_file = next((f for f in response_files if 'remote' in f), None)
+            if local_file and remote_file:
+                try:
+                    with open(os.path.join(folder_path, local_file), 'r', encoding='utf-8') as f_local, \
+                        open(os.path.join(folder_path, remote_file), 'r', encoding='utf-8') as f_remote:
+                        local_data = json.load(f_local)
+                        remote_data = json.load(f_remote)
+                        # Only count if BOTH succeeded
+                        if local_data.get('success', True) and remote_data.get('success', True):
+                            local_time = local_data.get('processing_time_seconds')
+                            remote_time = remote_data.get('processing_time_seconds')
+                            if local_time is not None and remote_time is not None:
+                                local_times.append(local_time)
+                                remote_times.append(remote_time)
+                except Exception:
+                    continue
+        avg_local = round(sum(local_times) / len(local_times), 2) if local_times else None
+        avg_remote = round(sum(remote_times) / len(remote_times), 2) if remote_times else None
+        return {'avg_local': avg_local, 'avg_remote': avg_remote}
+
     def should_ignore_path(self, path):
         """Check if this path should be ignored"""
         for pattern in self.ignore_patterns:
@@ -77,15 +115,23 @@ class FileProcessor:
             
             # Check if files exist and are valid JSON
             valid_responses = 0
+            api_failed = False
             for file in response_files:
                 try:
                     with open(os.path.join(folder_path, file), 'r', encoding='utf-8') as f:
-                        json.load(f)
-                    valid_responses += 1
+                        data = json.load(f)
+                        if not data.get('success', True):
+                            api_failed = True
+                        else:
+                            valid_responses += 1
                 except:
-                    pass
+                    api_failed = True  # Treat as failed if not valid JSON
+                    # pass
+
             
-            if valid_responses >= 2:
+            if api_failed:
+                return {'status': 'error'}
+            elif valid_responses >= 2:
                 return {'status': 'ready'}
             else:
                 return {'status': 'error'}
@@ -282,7 +328,8 @@ class FileProcessor:
             # Load the first two response files
             responses = {}
             api_names = []
-            
+            processing_times = {}
+
             for i, file in enumerate(response_files[:2]):
                 # Extract API name from filename (like your working code)
                 api_name = file.replace('_response.json', '').replace(file_path + '_', '')
@@ -293,6 +340,8 @@ class FileProcessor:
                         full_response = json.load(f)
                         # Get the response_data part (like your working code)
                         responses[api_name] = full_response.get('response_data', {})
+                        # Extract processing_time_seconds
+                        processing_times[api_name] = full_response.get('processing_time_seconds', None)
                 except Exception as e:
                     return {
                         'success': False,
@@ -321,9 +370,12 @@ class FileProcessor:
                 'right_content': lines2,  # These are the line arrays
                 'differences': differences,
                 'has_differences': len(differences) > 0,
-                'difference_count': len(differences)
+                'difference_count': len(differences),
+                'processing_times': {
+                    api1: processing_times.get(api1),
+                    api2: processing_times.get(api2)
+                }
             }
-            
         except Exception as e:
             return {
                 'success': False,

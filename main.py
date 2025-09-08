@@ -11,6 +11,7 @@ def main():
     # Set paths
     current_dir = os.path.dirname(os.path.abspath(__file__))
     results_dir = os.path.join(current_dir, "results_to_compare")
+    # results_dir = "D:/Projects/DV/test/results_to_compare"
     template_dir = os.path.join(current_dir, "src", "templates")
     static_dir = os.path.join(current_dir, "static")
 

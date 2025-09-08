@@ -254,7 +254,7 @@ class DiffViewer {
     renderSideBySideDiff(data) {
         const leftContent = this.renderDiffSide(data.left_content, data.left_api, 'left');
         const rightContent = this.renderDiffSide(data.right_content, data.right_api, 'right');
-        
+
         const diffContent = document.getElementById('diffContent');
         if (diffContent) {
             diffContent.innerHTML = `
